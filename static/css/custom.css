@@ -1,0 +1,99 @@
+/* Custom Styles for NovaDrop Enterprise Platform */
+
+:root {
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --accent: #06b6d4;
+    --surface-dark: #0f172a;
+}
+
+/* Glassmorphism Accents */
+.glass-nav {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Animation utilities */
+@keyframes pulseGlow {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-glow {
+    animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* Tracking Timeline Milestones */
+.timeline-step {
+    position: relative;
+}
+.timeline-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 36px;
+    bottom: -16px;
+    width: 2px;
+    background: #334155;
+}
+.timeline-step.completed:not(:last-child)::after {
+    background: #10b981;
+}
+
+/* Modal transitions */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.2s ease-in-out;
+}
+
+/* Toast Container */
+#toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+.toast {
+    pointer-events: auto;
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

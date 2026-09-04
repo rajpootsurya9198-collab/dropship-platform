@@ -1,0 +1,38 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Environments & secrets
+.env
+.venv
+env/
+venv/
+
+# SQLite runtime database & journals
+dropship.db
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+*.log
+
+# Pytest / testing cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
