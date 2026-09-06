@@ -90,6 +90,13 @@ window.AdminDashboardView = {
                         <button class="adm-tab ${this.activeTab === 'customers' ? 'active text-indigo-400 border-b-2 border-indigo-500 font-bold' : 'text-slate-400 hover:text-white font-semibold'} pb-3 text-xs sm:text-sm whitespace-nowrap transition flex items-center gap-2" data-tab="customers">
                             <i data-lucide="users" class="w-4 h-4"></i> Customers CRM
                         </button>
+                    ` : ''}
+                    ${(user.role === 'admin' || user.role === 'merchant') ? `
+                        <button class="adm-tab ${this.activeTab === 'webhooks' ? 'active text-indigo-400 border-b-2 border-indigo-500 font-bold' : 'text-slate-400 hover:text-white font-semibold'} pb-3 text-xs sm:text-sm whitespace-nowrap transition flex items-center gap-2" data-tab="webhooks">
+                            <i data-lucide="webhook" class="w-4 h-4"></i> Webhooks & API
+                        </button>
+                    ` : ''}
+                    ${user.role === 'admin' ? `
                         <button class="adm-tab ${this.activeTab === 'settings' ? 'active text-indigo-400 border-b-2 border-indigo-500 font-bold' : 'text-slate-400 hover:text-white font-semibold'} pb-3 text-xs sm:text-sm whitespace-nowrap transition flex items-center gap-2" data-tab="settings">
                             <i data-lucide="settings" class="w-4 h-4"></i> Platform Settings
                         </button>
@@ -136,6 +143,7 @@ window.AdminDashboardView = {
             case "reviews": await this.renderReviewsTab(workspace); break;
             case "refunds": await this.renderRefundsTab(workspace); break;
             case "customers": await this.renderCustomersTab(workspace); break;
+            case "webhooks": await this.renderWebhooksTab(workspace); break;
             case "settings": await this.renderSettingsTab(workspace); break;
             default: await this.renderOverviewTab(workspace);
         }
@@ -1303,6 +1311,554 @@ window.AdminDashboardView = {
         } catch (err) {
             container.innerHTML = `<div class="text-rose-400 text-xs">Failed to load settings: ${err.message}</div>`;
         }
+    },
+
+    // -------------------------------------------------------------
+    // TAB: WEBHOOKS & API INTEGRATIONS
+    // -------------------------------------------------------------
+    async renderWebhooksTab(container) {
+        container.innerHTML = `
+            <div class="py-16 text-center text-slate-400">
+                <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <span class="text-xs font-semibold">Loading webhook endpoints and delivery logs...</span>
+            </div>
+        `;
+
+        try {
+            const [subsRes, delivRes] = await Promise.all([
+                window.api.getWebhookSubscriptions(),
+                window.api.getWebhookDeliveries(null, "", 30)
+            ]);
+
+            const subscriptions = subsRes.subscriptions || [];
+            const deliveries = delivRes.deliveries || [];
+
+            const totalDeliveries = deliveries.length;
+            const successDeliveries = deliveries.filter(d => d.is_success).length;
+            const failedDeliveries = totalDeliveries - successDeliveries;
+
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <!-- Webhooks Header & Overview -->
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-2xl bg-slate-800/80 border border-slate-700/80 shadow-md">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+                                    Enterprise Webhooks
+                                </span>
+                                <span class="text-xs text-slate-400">• HMAC-SHA256 Signed</span>
+                            </div>
+                            <h2 class="text-xl font-bold text-white mt-1">Webhooks & Event Subscriptions</h2>
+                            <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+                                Configure HTTP POST destinations to receive instantaneous events when orders are placed, paid, fulfilled, or cancelled. Payloads are signed with an HMAC-SHA256 signature header (<code class="text-indigo-300">X-NovaDrop-Signature</code>).
+                            </p>
+                        </div>
+                        <button id="add-webhook-btn" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shrink-0">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Add Webhook Endpoint
+                        </button>
+                    </div>
+
+                    <!-- Webhook Delivery Metrics -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                            <div class="text-xs text-slate-400">Active Endpoints</div>
+                            <div class="text-2xl font-black text-white mt-1">${subscriptions.filter(s => s.is_active).length} / ${subscriptions.length}</div>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                            <div class="text-xs text-slate-400">Recent Deliveries Logged</div>
+                            <div class="text-2xl font-black text-indigo-400 mt-1">${totalDeliveries}</div>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                            <div class="text-xs text-slate-400">Successful Dispatches (2xx)</div>
+                            <div class="text-2xl font-black text-emerald-400 mt-1">${successDeliveries}</div>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                            <div class="text-xs text-slate-400">Failed Dispatches</div>
+                            <div class="text-2xl font-black text-rose-400 mt-1">${failedDeliveries}</div>
+                        </div>
+                    </div>
+
+                    <!-- Subscriptions List -->
+                    <div class="p-6 rounded-2xl bg-slate-800/80 border border-slate-700/80 shadow-md space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i data-lucide="radio" class="w-4 h-4 text-indigo-400"></i> Registered Endpoints (${subscriptions.length})
+                            </h3>
+                            <button id="quick-demo-webhook-btn" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 underline">
+                                + Add Built-in Sandbox Receiver
+                            </button>
+                        </div>
+
+                        ${subscriptions.length === 0 ? `
+                            <div class="py-12 text-center text-slate-400 border border-dashed border-slate-700 rounded-xl">
+                                <i data-lucide="webhook" class="w-10 h-10 mx-auto mb-2 text-slate-500"></i>
+                                <div class="text-sm font-bold text-slate-300">No Webhook Endpoints Configured</div>
+                                <div class="text-xs text-slate-500 mt-1">Register your first HTTP endpoint to start streaming order and tracking events.</div>
+                                <button id="add-webhook-empty-btn" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition">
+                                    Create Webhook
+                                </button>
+                            </div>
+                        ` : `
+                            <div class="space-y-3">
+                                ${subscriptions.map(sub => `
+                                    <div class="p-4 rounded-xl bg-slate-900/80 border ${sub.is_active ? 'border-slate-700/80' : 'border-slate-800 opacity-60'} flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div class="space-y-1.5 min-w-0">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${sub.is_active ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'}">
+                                                    ${sub.is_active ? 'ACTIVE' : 'DISABLED'}
+                                                </span>
+                                                <code class="text-xs font-bold text-indigo-300 font-mono break-all">${sub.url}</code>
+                                            </div>
+                                            ${sub.description ? `<div class="text-xs text-slate-300">${sub.description}</div>` : ''}
+                                            <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                                <span class="text-[11px] text-slate-400">Events:</span>
+                                                ${(sub.events || ["*"]).map(ev => `
+                                                    <span class="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] font-mono text-slate-300 border border-slate-700">
+                                                        ${ev}
+                                                    </span>
+                                                `).join("")}
+                                            </div>
+                                            <div class="text-[11px] text-slate-500 flex items-center gap-3 pt-1">
+                                                <span>Secret: <span class="font-mono text-slate-400">${sub.secret.slice(0, 10)}••••••••</span></span>
+                                                <span>•</span>
+                                                <span>Deliveries: <strong class="text-slate-300">${sub.metrics?.total || 0}</strong> (<span class="text-emerald-400">${sub.metrics?.success || 0} ok</span>, <span class="text-rose-400">${sub.metrics?.failed || 0} failed</span>)</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-2 shrink-0 self-end md:self-center">
+                                            <button class="test-webhook-btn px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition flex items-center gap-1.5" data-id="${sub.id}">
+                                                <i data-lucide="zap" class="w-3.5 h-3.5"></i> Test Ping
+                                            </button>
+                                            <button class="edit-webhook-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5" data-id="${sub.id}">
+                                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i> Edit
+                                            </button>
+                                            <button class="delete-webhook-btn px-3 py-1.5 rounded-lg bg-rose-600/10 hover:bg-rose-600/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition flex items-center gap-1.5" data-id="${sub.id}">
+                                                <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Recent Webhook Deliveries Table -->
+                    <div class="p-6 rounded-2xl bg-slate-800/80 border border-slate-700/80 shadow-md space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i data-lucide="activity" class="w-4 h-4 text-indigo-400"></i> Recent Webhook Delivery Logs
+                            </h3>
+                            <span class="text-xs text-slate-400">Last ${deliveries.length} attempts</span>
+                        </div>
+
+                        ${deliveries.length === 0 ? `
+                            <div class="py-8 text-center text-xs text-slate-500">No webhook delivery logs recorded yet.</div>
+                        ` : `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs text-slate-300">
+                                    <thead class="text-[11px] uppercase bg-slate-900/60 text-slate-400 border-b border-slate-700">
+                                        <tr>
+                                            <th class="p-3">Status</th>
+                                            <th class="p-3">Event</th>
+                                            <th class="p-3">Destination URL</th>
+                                            <th class="p-3">HTTP Code</th>
+                                            <th class="p-3">Latency</th>
+                                            <th class="p-3">Timestamp</th>
+                                            <th class="p-3 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-700/50">
+                                        ${deliveries.map(d => `
+                                            <tr class="hover:bg-slate-700/30 transition">
+                                                <td class="p-3">
+                                                    ${d.is_success ? `
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Success
+                                                        </span>
+                                                    ` : `
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Failed
+                                                        </span>
+                                                    `}
+                                                </td>
+                                                <td class="p-3 font-mono font-bold text-indigo-300">${d.event_name}</td>
+                                                <td class="p-3 font-mono text-slate-400 max-w-[200px] truncate" title="${d.url}">${d.url}</td>
+                                                <td class="p-3 font-mono">${d.status_code || '<span class="text-rose-400">ERR</span>'}</td>
+                                                <td class="p-3 font-mono text-slate-400">${d.latency_ms}ms</td>
+                                                <td class="p-3 text-slate-400">${d.created_at}</td>
+                                                <td class="p-3 text-right space-x-2">
+                                                    <button class="inspect-payload-btn px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold transition" data-delivery-id="${d.id}">
+                                                        Inspect
+                                                    </button>
+                                                    <button class="resend-webhook-btn px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-[11px] font-semibold transition" data-delivery-id="${d.id}">
+                                                        Retry
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join("")}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+
+            if (window.lucide) window.lucide.createIcons();
+
+            // Bind events for buttons
+            const openAddModal = () => this.openWebhookModal();
+            const addBtn = container.querySelector("#add-webhook-btn");
+            if (addBtn) addBtn.addEventListener("click", openAddModal);
+            const emptyBtn = container.querySelector("#add-webhook-empty-btn");
+            if (emptyBtn) emptyBtn.addEventListener("click", openAddModal);
+
+            const quickDemoBtn = container.querySelector("#quick-demo-webhook-btn");
+            if (quickDemoBtn) {
+                quickDemoBtn.addEventListener("click", async () => {
+                    try {
+                        const localUrl = `${window.location.origin}/api/webhooks/test-receiver`;
+                        await window.api.createWebhookSubscription({
+                            url: localUrl,
+                            description: "Built-in NovaDrop Sandbox Webhook Receiver",
+                            events: ["*"],
+                            is_active: true
+                        });
+                        window.showToast("Sandbox receiver webhook registered!", "success");
+                        this.renderWebhooksTab(container);
+                    } catch (e) {
+                        window.showToast(e.message, "error");
+                    }
+                });
+            }
+
+            // Test Ping buttons
+            container.querySelectorAll(".test-webhook-btn").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const id = btn.getAttribute("data-id");
+                    btn.disabled = true;
+                    btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Ping...`;
+                    if (window.lucide) window.lucide.createIcons();
+                    try {
+                        const res = await window.api.testWebhookSubscription(id);
+                        if (res.status === "delivered") {
+                            window.showToast(`Test ping succeeded (${res.details.latency_ms}ms, HTTP ${res.details.status_code})`, "success");
+                        } else {
+                            window.showToast(`Test ping failed: ${res.details.error_message || 'HTTP error'}`, "warning");
+                        }
+                        this.renderWebhooksTab(container);
+                    } catch (err) {
+                        window.showToast(err.message, "error");
+                        btn.disabled = false;
+                        btn.innerHTML = `<i data-lucide="zap" class="w-3.5 h-3.5"></i> Test Ping`;
+                        if (window.lucide) window.lucide.createIcons();
+                    }
+                });
+            });
+
+            // Edit buttons
+            container.querySelectorAll(".edit-webhook-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const id = parseInt(btn.getAttribute("data-id"));
+                    const sub = subscriptions.find(s => s.id === id);
+                    if (sub) this.openWebhookModal(sub);
+                });
+            });
+
+            // Delete buttons
+            container.querySelectorAll(".delete-webhook-btn").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    if (!confirm("Are you sure you want to delete this webhook subscription? All delivery history will be removed.")) return;
+                    const id = btn.getAttribute("data-id");
+                    try {
+                        await window.api.deleteWebhookSubscription(id);
+                        window.showToast("Webhook subscription removed.", "success");
+                        this.renderWebhooksTab(container);
+                    } catch (err) {
+                        window.showToast(err.message, "error");
+                    }
+                });
+            });
+
+            // Inspect Payload buttons
+            container.querySelectorAll(".inspect-payload-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const id = parseInt(btn.getAttribute("data-delivery-id"));
+                    const delivery = deliveries.find(d => d.id === id);
+                    if (delivery) this.openInspectPayloadModal(delivery);
+                });
+            });
+
+            // Retry delivery buttons
+            container.querySelectorAll(".resend-webhook-btn").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const id = btn.getAttribute("data-delivery-id");
+                    try {
+                        await window.api.resendWebhookDelivery(id);
+                        window.showToast("Webhook re-delivery triggered.", "success");
+                        this.renderWebhooksTab(container);
+                    } catch (err) {
+                        window.showToast(err.message, "error");
+                    }
+                });
+            });
+
+        } catch (err) {
+            container.innerHTML = `
+                <div class="p-8 text-center bg-slate-800/80 rounded-2xl border border-rose-500/30 space-y-3">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-rose-400 mx-auto"></i>
+                    <h3 class="text-sm font-bold text-white">Failed to load webhooks</h3>
+                    <p class="text-xs text-rose-300">${err.message}</p>
+                    <button onclick="window.AdminDashboardView.renderWebhooksTab(document.getElementById('admin-tab-workspace'))" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition">
+                        Retry
+                    </button>
+                </div>
+            `;
+            if (window.lucide) window.lucide.createIcons();
+        }
+    },
+
+    openWebhookModal(sub = null) {
+        const isEdit = !!sub;
+        let modal = document.getElementById("admin-webhook-modal");
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = "admin-webhook-modal";
+            modal.className = "fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto modal-backdrop";
+            document.body.appendChild(modal);
+        }
+
+        const eventsList = [
+            { id: "all", label: "* (All Events)", desc: "Receive all platform event dispatches" },
+            { id: "order.created", label: "order.created", desc: "Buyer completes checkout" },
+            { id: "order.paid", label: "order.paid", desc: "Payment successfully authorized & captured" },
+            { id: "order.fulfilled", label: "order.fulfilled", desc: "Fulfillment created & carrier tracking assigned" },
+            { id: "order.cancelled", label: "order.cancelled", desc: "Order cancelled & stock restored" },
+            { id: "tracking.updated", label: "tracking.updated", desc: "Carrier checkpoint or milestone status logged" },
+            { id: "inventory.low_stock", label: "inventory.low_stock", desc: "Product inventory falls below threshold" },
+            { id: "refund.requested", label: "refund.requested", desc: "Customer submits refund or dispute" }
+        ];
+
+        const selectedEvents = sub ? (sub.events || ["*"]) : ["*"];
+        const defaultSecret = sub ? sub.secret : `whsec_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+
+        modal.innerHTML = `
+            <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl space-y-0">
+                <div class="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-900/80">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                            <i data-lucide="webhook" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">${isEdit ? 'Edit Webhook Endpoint' : 'Register Webhook Endpoint'}</h3>
+                            <p class="text-[11px] text-slate-400">Configure destination URL and event trigger filter</p>
+                        </div>
+                    </div>
+                    <button class="close-modal-btn text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+
+                <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div>
+                        <label class="block text-xs text-slate-300 font-semibold mb-1">Target Payload URL *</label>
+                        <input type="url" id="wh-form-url" value="${sub ? sub.url : ''}" placeholder="https://api.yourdomain.com/webhooks/novadrop" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none">
+                        <span class="text-[11px] text-slate-500 mt-1 block">Must start with http:// or https://</span>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-300 font-semibold mb-1">Description / Label</label>
+                        <input type="text" id="wh-form-desc" value="${sub ? (sub.description || '') : ''}" placeholder="e.g. ERP System / Discord Notifications / Warehouse API" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-xs text-slate-300 font-semibold">HMAC Signing Secret</label>
+                            <button type="button" id="wh-gen-secret-btn" class="text-[11px] text-indigo-400 hover:text-indigo-300">Generate New Secret</button>
+                        </div>
+                        <input type="text" id="wh-form-secret" value="${defaultSecret}" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none">
+                        <span class="text-[11px] text-slate-500 mt-1 block">Used to compute the HMAC-SHA256 signature in the <code class="text-indigo-300">X-NovaDrop-Signature</code> header.</span>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-300 font-semibold mb-2">Subscribed Event Triggers</label>
+                        <div class="space-y-2 bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                            ${eventsList.map(ev => {
+                                const checked = selectedEvents.includes("*") || selectedEvents.includes(ev.id) || (ev.id === 'all' && selectedEvents.includes("*"));
+                                return `
+                                    <label class="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300 hover:text-white">
+                                        <input type="checkbox" name="wh-events" value="${ev.id === 'all' ? '*' : ev.id}" ${checked ? 'checked' : ''} class="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                                        <div>
+                                            <span class="font-mono font-bold text-indigo-300">${ev.label}</span>
+                                            <span class="text-[11px] text-slate-400 ml-1.5">— ${ev.desc}</span>
+                                        </div>
+                                    </label>
+                                `;
+                            }).join("")}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-2">
+                        <input type="checkbox" id="wh-form-active" ${sub ? (sub.is_active ? 'checked' : '') : 'checked'} class="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                        <label for="wh-form-active" class="text-xs text-slate-300 font-semibold cursor-pointer">Endpoint is active and receiving live dispatches</label>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 p-4 border-t border-slate-800 bg-slate-900/90">
+                    <button class="close-modal-btn text-xs text-slate-400 hover:text-white px-4 py-2">Cancel</button>
+                    <button id="save-webhook-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition shadow-md">
+                        ${isEdit ? 'Save Webhook Changes' : 'Register Webhook'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+
+        const close = () => modal.classList.add("hidden");
+        modal.querySelectorAll(".close-modal-btn").forEach(b => b.addEventListener("click", close));
+
+        modal.querySelector("#wh-gen-secret-btn").addEventListener("click", () => {
+            modal.querySelector("#wh-form-secret").value = `whsec_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+        });
+
+        modal.querySelector("#save-webhook-btn").addEventListener("click", async () => {
+            const url = modal.querySelector("#wh-form-url").value.trim();
+            if (!url) {
+                window.showToast("Target URL is required.", "warning");
+                return;
+            }
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                window.showToast("URL must start with http:// or https://", "warning");
+                return;
+            }
+
+            const checkedBoxes = Array.from(modal.querySelectorAll("input[name='wh-events']:checked")).map(cb => cb.value);
+            const events = checkedBoxes.includes("*") ? ["*"] : (checkedBoxes.length > 0 ? checkedBoxes : ["*"]);
+
+            const payload = {
+                url: url,
+                description: modal.querySelector("#wh-form-desc").value.trim(),
+                secret: modal.querySelector("#wh-form-secret").value.trim(),
+                events: events,
+                is_active: modal.querySelector("#wh-form-active").checked
+            };
+
+            try {
+                if (isEdit) {
+                    await window.api.updateWebhookSubscription(sub.id, payload);
+                    window.showToast("Webhook subscription updated!", "success");
+                } else {
+                    await window.api.createWebhookSubscription(payload);
+                    window.showToast("Webhook subscription created successfully!", "success");
+                }
+                close();
+                this.renderWebhooksTab(document.getElementById("admin-tab-workspace"));
+            } catch (err) {
+                window.showToast(err.message, "error");
+            }
+        });
+    },
+
+    openInspectPayloadModal(delivery) {
+        let modal = document.getElementById("admin-inspect-delivery-modal");
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = "admin-inspect-delivery-modal";
+            modal.className = "fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto modal-backdrop";
+            document.body.appendChild(modal);
+        }
+
+        let formattedPayload = "";
+        try {
+            formattedPayload = JSON.stringify(JSON.parse(delivery.payload_json), null, 2);
+        } catch (e) {
+            formattedPayload = delivery.payload_json;
+        }
+
+        modal.innerHTML = `
+            <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-0">
+                <div class="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-900/80">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg ${delivery.is_success ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'} flex items-center justify-center">
+                            <i data-lucide="${delivery.is_success ? 'check-circle-2' : 'alert-circle'}" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Delivery #${delivery.id} — <span class="font-mono text-indigo-300">${delivery.event_name}</span></h3>
+                            <p class="text-[11px] text-slate-400">${delivery.created_at} • ${delivery.latency_ms}ms latency</p>
+                        </div>
+                    </div>
+                    <button class="close-modal-btn text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+
+                <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+                            <div class="text-slate-400 text-[11px]">HTTP Status</div>
+                            <div class="text-sm font-bold ${delivery.is_success ? 'text-emerald-400' : 'text-rose-400'} mt-0.5">
+                                ${delivery.status_code || 'Network Error / Timeout'}
+                            </div>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+                            <div class="text-slate-400 text-[11px]">Delivery Result</div>
+                            <div class="text-sm font-bold text-white mt-0.5">
+                                ${delivery.is_success ? 'Delivered (2xx OK)' : 'Delivery Failed'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="text-xs font-bold text-slate-300 mb-1">Destination URL</div>
+                        <code class="block p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-indigo-300 break-all">${delivery.url}</code>
+                    </div>
+
+                    ${delivery.error_message ? `
+                        <div>
+                            <div class="text-xs font-bold text-rose-400 mb-1">Error Message</div>
+                            <code class="block p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/40 text-xs font-mono text-rose-300">${delivery.error_message}</code>
+                        </div>
+                    ` : ''}
+
+                    <div>
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-300 mb-1">
+                            <span>Dispatched Payload Envelope</span>
+                            <span class="text-[11px] text-slate-500 font-normal">JSON</span>
+                        </div>
+                        <pre class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-48 scrollbar-none">${formattedPayload}</pre>
+                    </div>
+
+                    ${delivery.response_body ? `
+                        <div>
+                            <div class="text-xs font-bold text-slate-300 mb-1">Receiver Response Body</div>
+                            <pre class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto max-h-36 scrollbar-none">${delivery.response_body}</pre>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div class="flex justify-end gap-3 p-4 border-t border-slate-800 bg-slate-900/90">
+                    <button class="close-modal-btn text-xs text-slate-400 hover:text-white px-4 py-2">Close</button>
+                    <button id="modal-retry-delivery-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-md flex items-center gap-1.5">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Retry Delivery
+                    </button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+
+        const close = () => modal.classList.add("hidden");
+        modal.querySelectorAll(".close-modal-btn").forEach(b => b.addEventListener("click", close));
+
+        modal.querySelector("#modal-retry-delivery-btn").addEventListener("click", async () => {
+            try {
+                await window.api.resendWebhookDelivery(delivery.id);
+                window.showToast("Webhook re-delivery initiated.", "success");
+                close();
+                this.renderWebhooksTab(document.getElementById("admin-tab-workspace"));
+            } catch (err) {
+                window.showToast(err.message, "error");
+            }
+        });
     },
 
     // -------------------------------------------------------------

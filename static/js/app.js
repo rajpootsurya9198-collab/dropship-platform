@@ -140,6 +140,19 @@ class AppRouter {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     window.router = new AppRouter();
+
+    // Verify session validity on initial boot (cleanly logs out if JWT is expired/invalid)
+    if (window.appState && window.appState.token && window.api) {
+        try {
+            const meRes = await window.api.getMe();
+            if (meRes && meRes.user) {
+                window.appState.setUser(meRes.user, window.appState.token);
+            }
+        } catch (err) {
+            // ApiClient 401 interceptor automatically clears token, resets state and notifies UI
+            console.warn("Session expired or invalid on boot:", err.message);
+        }
+    }
 });

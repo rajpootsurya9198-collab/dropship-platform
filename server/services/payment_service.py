@@ -26,11 +26,13 @@ class PaymentProvider(ABC):
         pass
 
 
+import os
+
 class MockStripePaymentProvider(PaymentProvider):
     """Production-grade Development Mock Provider with Full Webhook & Tokenization Support"""
     
-    def __init__(self, api_key: str = "sk_test_mock_secret_key_2026"):
-        self.api_key = api_key
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key or os.environ.get("PAYMENT_SECRET_KEY", "demo_mock_payment_key")
 
     def create_checkout_session(self, order_id: int, amount: float, currency: str = "USD", metadata: dict = None) -> dict:
         session_id = f"cs_test_{secrets.token_hex(16)}"
@@ -89,7 +91,7 @@ class PaymentService:
 
     def __init__(self, provider: PaymentProvider = None):
         self.provider = provider or MockStripePaymentProvider()
-        self.webhook_secret = "whsec_mock_webhook_secret_key_2026"
+        self.webhook_secret = os.environ.get("PAYMENT_WEBHOOK_SECRET", "demo_mock_webhook_secret_key")
 
     def process_order_payment(self, order_id: int, amount: float, currency: str = "USD", card_token: str = None) -> dict:
         order = query_one("SELECT * FROM orders WHERE id = ?", (order_id,))

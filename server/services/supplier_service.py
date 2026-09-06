@@ -1,4 +1,5 @@
 import hashlib
+import os
 import json
 import secrets
 import random
@@ -34,9 +35,9 @@ class SupplierProvider(ABC):
 class ApexTechSupplierProvider(SupplierProvider):
     """Factory API Adapter for ApexTech Global (Shenzhen Electronics Logistics)"""
 
-    def __init__(self, api_key: str = "apex_live_sec_key_shenzhen_2026"):
-        self.api_key = api_key
-        self.endpoint = "https://api.apextech.com/v2/dropship"
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key or os.environ.get("SUPPLIER_APEX_API_KEY", "demo_apex_key")
+        self.endpoint = os.environ.get("SUPPLIER_APEX_ENDPOINT", "https://api.apextech.com/v2/dropship")
 
     def get_products(self) -> List[dict]:
         return [

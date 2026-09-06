@@ -238,6 +238,19 @@ def dispatch_fulfillment(order_id):
         "tracking_number": tracking_number
     })
 
+    try:
+        from ..services.webhook_service import webhook_service
+        webhook_service.dispatch_event("order.fulfilled", {
+            "order_id": order_id,
+            "order_number": order["order_number"],
+            "fulfillment_id": ful_target_id,
+            "carrier": carrier,
+            "tracking_number": tracking_number,
+            "shipped_at": shipped_at
+        })
+    except Exception as e:
+        print(f"Webhook dispatch error on fulfillment: {e}")
+
     return jsonify({
         "message": f"Order {order['order_number']} dispatched with {carrier} tracking {tracking_number}.",
         "tracking_number": tracking_number,
@@ -277,6 +290,19 @@ def add_tracking_checkpoint(order_id):
             "UPDATE orders SET order_status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (order_id,)
         )
+
+    try:
+        from ..services.webhook_service import webhook_service
+        webhook_service.dispatch_event("tracking.updated", {
+            "order_id": order_id,
+            "fulfillment_id": fulfillment_id,
+            "status_stage": status_stage,
+            "location": location,
+            "description": description,
+            "checkpoint_time": now_str
+        })
+    except Exception as e:
+        print(f"Webhook dispatch error on tracking checkpoint: {e}")
 
     return jsonify({"message": "Tracking checkpoint logged.", "status_stage": status_stage})
 

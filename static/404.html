@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaDrop - Redirecting...</title>
+    <script>
+        // Single Page App redirect for GitHub Pages
+        (function() {
+            var path = window.location.pathname;
+            var search = window.location.search || '';
+            var hash = window.location.hash || '';
+
+            var segments = path.split('/').filter(Boolean);
+            var targetHash = hash;
+            if (!targetHash && segments.length > 0) {
+                var lastSegment = segments[segments.length - 1];
+                if (['store', 'checkout', 'cart', 'tracking', 'account', 'admin'].includes(lastSegment)) {
+                    targetHash = '#' + lastSegment;
+                }
+            }
+
+            var targetUrl = 'index.html' + search + (targetHash || '#store');
+            window.location.replace(targetUrl);
+        })();
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .card {
+            background: #111827;
+            border: 1px solid #1f2937;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            max-width: 420px;
+        }
+        a {
+            display: inline-block;
+            margin-top: 1rem;
+            background: #4f46e5;
+            color: white;
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="margin-top:0;">Navigating to NovaDrop...</h2>
+        <p style="color: #94a3b8; font-size: 0.875rem;">Redirecting to the Single Page Application storefront.</p>
+        <a href="index.html#store">Click here if not redirected</a>
+    </div>
+</body>
+</html>

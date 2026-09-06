@@ -539,6 +539,13 @@ def seed_database():
                VALUES (?, 1, ?, ?, 'Damaged during international transit', 'The retail box corner was crushed on arrival. Requesting a partial refund for gift repackaging.', 15.00, 'under_review', '["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300"]')""",
             (ord1_id, user_ids["customer@example.com"], supplier_ids["SUP-APEX-01"])
         )
+
+        # 12. Seed Webhook Subscriptions
+        print("Seeding webhook subscriptions...")
+        cursor.execute(
+            """INSERT INTO webhook_subscriptions (url, secret, description, events_json, is_active)
+               VALUES ('http://127.0.0.1:5000/api/webhooks/test-receiver', 'whsec_enterprise_sandbox_mock_key_2026', 'NovaDrop Local Sandbox Receiver', '["*"]', 1)"""
+        )
         
     print("Database successfully seeded with realistic enterprise dropshipping data!")
 

@@ -119,6 +119,19 @@ POST /api/orders/<order_number>/request-refund - Submit refund dispute
 
 GET  /api/tracking/search?query=...       - Real-time carrier milestone tracker
 
+POST /api/webhooks/payment                 - Inbound Stripe payment webhook (HMAC verified, idempotent)
+POST /api/webhooks/supplier                - Inbound carrier milestone webhook (YunExpress, DHL, FedEx)
+POST /api/webhooks/test-receiver           - Built-in sandbox webhook receiver endpoint
+GET  /api/webhooks/events                  - Supported event catalogue (order.created, order.paid, etc.)
+GET  /api/webhooks/subscriptions           - List outbound webhook subscriptions with delivery metrics
+POST /api/webhooks/subscriptions           - Register new webhook URL with event filter & HMAC secret
+GET  /api/webhooks/subscriptions/<id>      - Webhook subscription details & delivery log
+PUT  /api/webhooks/subscriptions/<id>      - Update webhook URL, events, active status
+DELETE /api/webhooks/subscriptions/<id>    - Remove webhook subscription
+POST /api/webhooks/subscriptions/<id>/test - Send synchronous test ping event
+GET  /api/webhooks/deliveries              - Webhook delivery audit logs & HTTP statuses
+POST /api/webhooks/deliveries/<id>/resend  - Re-deliver past event payload
+
 GET  /api/admin/analytics/overview        - GMV, net margins, order metrics
 GET  /api/admin/analytics/sales-trend     - 7-day revenue trend data
 GET  /api/admin/products                  - Admin product & inventory table
@@ -129,20 +142,139 @@ PUT  /api/admin/refunds/<id>/status       - Approve / reject refund dispute
 
 ---
 
-## 🧪 Running Automated Tests
+## 🌐 Production Architecture & Separation of Concerns
 
-```bash
-cd /root/dropship_platform
-PYTHONPATH=. pytest tests/test_platform.py -v
+NovaDrop uses an enterprise decoupled architecture designed for high availability, zero server lock-in, and instant frontend delivery via global CDNs:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              STATIC FRONTEND LAYER                      │
+│   Hosted on GitHub Pages CDN (or Netlify/Vercel/S3)     │
+│   https://rajpootsurya9198-collab.github.io             │
+│                                                         │
+│   • Tailwind CSS + Chart.js + Pure Vanilla JS SPA      │
+│   • Configurable API Base URL (localStorage / config.js)│
+│   • Safe SPA Client Routing with 404.html Fallback      │
+│   • Instant In-Browser Backend Health Probe Modal       │
+└──────────────────────────┬──────────────────────────────┘
+                           │ Cross-Origin HTTPS
+                           │ Bearer JWT Authentication
+                           │ RESTful JSON API
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│               REST API BACKEND LAYER                    │
+│      Hosted on Render, Railway, Fly.io, or Docker       │
+│      https://your-novadrop-api.onrender.com             │
+│                                                         │
+│   • Python Flask with Modular Blueprint Architecture    │
+│   • Production Gunicorn WSGI Server (Multi-threaded)    │
+│   • Strict CORS Validation (CORS_ORIGINS Enforced)      │
+│   • Strict Production JWT_SECRET Verification           │
+│   • Asynchronous HMAC-SHA256 Webhook Dispatcher Pool    │
+│   • Safe Non-Destructive Schema Initialization          │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│               RELATIONAL DATABASE LAYER                 │
+│                                                         │
+│   • Production: Managed PostgreSQL (pgbouncer/pool)     │
+│   • Local Dev & CI: SQLite 3.53 (WAL Mode & Pragma)    │
+│   • Dual-Engine Query Translator (? to %s, RETURNING)   │
+│   • Complete Foreign Keys, Triggers & Relational Schema │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🏃 Running the Application
+## 🚀 Deployment Guide
+
+### Option 1: Frontend Deployment to GitHub Pages
+
+NovaDrop includes automated GitHub Actions deployment and manual fallback support.
+
+1. **Automated GitHub Actions Deployment**:
+   - Push to `main` branch.
+   - The included workflow [`.github/workflows/deploy-pages.yml`](file:///.github/workflows/deploy-pages.yml) automatically bundles the `static/` directory and publishes it directly to your GitHub Pages domain.
+   - In your GitHub repository: Go to **Settings > Pages > Build and deployment > Source**, select **GitHub Actions**.
+
+2. **Configuring Backend REST API URL for the Frontend**:
+   - **Method A (Zero-Code / UI)**: Open the deployed GitHub Pages site. Click the **"Backend API"** badge in the top bar. Enter your deployed Flask API URL (e.g. `https://your-novadrop-api.onrender.com/api`), click **Test Health**, and click **Save & Connect**.
+   - **Method B (URL Query Param)**: Open `https://<your-username>.github.io/?api_url=https://your-novadrop-api.onrender.com/api`. NovaDrop will auto-detect and persist it in `localStorage`.
+   - **Method C (Configuration File)**: Edit [`static/js/config.js`](file:///static/js/config.js) and set `API_BASE_URL: "https://your-novadrop-api.onrender.com/api"` before pushing to GitHub.
+
+---
+
+### Option 2: Backend Deployment to Render (1-Click)
+
+The repository includes a ready-to-use [`render.yaml`](file:///render.yaml) Blueprint:
+
+1. Create an account on [Render.com](https://render.com).
+2. Go to **Blueprints > New Blueprint Instance** and select your GitHub repository.
+3. Render automatically provisions:
+   - A managed **PostgreSQL Database** (`novadrop-db`).
+   - A Python **Web Service** (`novadrop-api`) running `gunicorn server.app:app --config gunicorn_config.py`.
+   - Injects `DATABASE_URL`, generates a secure `JWT_SECRET`, and configures `CORS_ORIGINS`.
+
+---
+
+### Option 3: Backend Deployment via Docker / Railway / Fly.io
+
+The included [`Dockerfile`](file:///Dockerfile) and [`Procfile`](file:///Procfile) make deploying anywhere effortless:
+
+1. **Build & Run Docker Container**:
+   ```bash
+   docker build -t novadrop-api .
+   docker run -p 5000:5000 \
+     -e ENV=production \
+     -e JWT_SECRET="your-strong-production-secret-at-least-16-chars" \
+     -e DATABASE_URL="postgresql://user:pass@host:5432/dbname" \
+     -e CORS_ORIGINS="https://rajpootsurya9198-collab.github.io" \
+     novadrop-api
+   ```
+
+2. **Deploy to Railway**:
+   - Connect your GitHub repository on Railway.
+   - Add a PostgreSQL plugin service.
+   - Set environment variables: `ENV=production`, `JWT_SECRET=<strong-random-key>`, `CORS_ORIGINS=https://rajpootsurya9198-collab.github.io`.
+   - Railway auto-detects `Procfile` and connects `DATABASE_URL`.
+
+---
+
+## 🔐 Environment Variables Reference
+
+| Variable | Required in Prod? | Default (Dev) | Description |
+|---|---|---|---|
+| `ENV` | No | `development` | Environment mode (`development` or `production`). Production activates strict security checks. |
+| `JWT_SECRET` | **YES (in prod)** | Dev fallback key | Secret key for HS256 JWT tokens. Must be >= 16 chars in production or startup aborts. |
+| `DATABASE_URL` | No | `sqlite:///dropship.db` | PostgreSQL connection URI (`postgresql://user:pass@host:port/db`) or SQLite path. |
+| `CORS_ORIGINS` | Recommended | Dev origins + GitHub Pages | Comma-separated list of allowed frontend origins (e.g. `https://rajpootsurya9198-collab.github.io`). |
+| `PORT` | No | `5000` | HTTP port for Gunicorn / Flask server. |
+| `WEB_CONCURRENCY` | No | `2` | Number of Gunicorn worker processes. |
+| `GUNICORN_THREADS` | No | `4` | Number of threads per Gunicorn worker process. |
+
+---
+
+## 🧪 Running Automated Tests
+
+NovaDrop includes an enterprise test suite covering authentication, RBAC, 17-step transactional order placement, stock race conditions, supplier dispatch, SEO metadata, webhooks, and production cross-origin security:
+
+```bash
+cd /root/dropship_platform
+PYTHONPATH=. pytest tests/ -v
+```
+
+All 47 automated tests execute in under 10 seconds.
+
+---
+
+## 🏃 Running the Application Locally
+
+For full local full-stack development (Flask backend serving frontend and SQLite):
 
 ```bash
 cd /root/dropship_platform
 PYTHONPATH=. python3 -m server.app
 ```
 
-Then visit `http://localhost:5000` in your web browser.
+Then visit `http://localhost:5000` in your web browser. Seed demo accounts are loaded automatically.

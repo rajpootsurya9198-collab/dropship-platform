@@ -323,3 +323,36 @@ CREATE INDEX IF NOT EXISTS idx_fulfillments_tracking ON fulfillments(tracking_nu
 CREATE INDEX IF NOT EXISTS idx_tracking_fulfillment ON tracking_events(fulfillment_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 CREATE INDEX IF NOT EXISTS idx_disputes_order ON refund_disputes(order_id);
+
+-- 18. Outbound Webhook Subscriptions
+CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    url TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    description TEXT,
+    events_json TEXT NOT NULL DEFAULT '["*"]',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. Webhook Delivery Logs
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    event_name TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status_code INTEGER,
+    response_body TEXT,
+    is_success INTEGER NOT NULL DEFAULT 0,
+    latency_ms INTEGER DEFAULT 0,
+    error_message TEXT,
+    attempt INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (subscription_id) REFERENCES webhook_subscriptions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_subscriptions_active ON webhook_subscriptions(is_active);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_subscription ON webhook_deliveries(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);
+

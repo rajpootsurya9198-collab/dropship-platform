@@ -68,6 +68,36 @@ def test_webhook_idempotency(client):
     assert res2.status_code == 200
     assert res2.get_json()["status"] == "already_processed"
 
+def test_supplier_webhook(client):
+    fulfillment = query_one("SELECT * FROM fulfillments WHERE tracking_number IS NOT NULL LIMIT 1")
+    if not fulfillment:
+        item = query_one("SELECT order_id, supplier_id FROM order_items LIMIT 1")
+        supplier_service.dispatch_supplier_order(item["order_id"], item["supplier_id"])
+        fulfillment = query_one("SELECT * FROM fulfillments WHERE tracking_number IS NOT NULL LIMIT 1")
+
+    payload = {
+        "supplier_order_id": f"SUP-{fulfillment['id']}",
+        "tracking_number": fulfillment["tracking_number"],
+        "carrier": fulfillment.get("carrier", "YunExpress"),
+        "status_stage": "in_transit",
+        "location": "Regional Hub Sorting Facility",
+        "description": "Customs clearance completed and departed facility."
+    }
+    res = client.post("/api/webhooks/supplier", json=payload)
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "received"
+
+    # Test delivery update via supplier webhook
+    deliv_payload = {
+        "tracking_number": fulfillment["tracking_number"],
+        "status_stage": "delivered",
+        "location": "Front Door",
+        "description": "Package delivered to recipient."
+    }
+    deliv_res = client.post("/api/webhooks/supplier", json=deliv_payload)
+    assert deliv_res.status_code == 200
+    assert deliv_res.get_json()["status"] == "received"
+
 # 4. Test Supplier Service Auto-Dispatch & Tracking Generation
 def test_supplier_service_dispatch():
     item = query_one("SELECT order_id, supplier_id FROM order_items LIMIT 1")

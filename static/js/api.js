@@ -2,7 +2,38 @@
 
 class ApiClient {
     constructor() {
-        this.baseUrl = "/api";
+        this.updateBaseUrl();
+    }
+
+    updateBaseUrl() {
+        if (window.NOVADROP_CONFIG && typeof window.NOVADROP_CONFIG.getApiBaseUrl === "function") {
+            this.baseUrl = window.NOVADROP_CONFIG.getApiBaseUrl();
+        } else {
+            this.baseUrl = localStorage.getItem("novadrop_api_url") || "/api";
+        }
+    }
+
+    buildUrl(endpoint) {
+        let base = (this.baseUrl || "").trim().replace(/\/+$/, "");
+        let ep = (endpoint || "").trim();
+        if (!ep.startsWith("/")) {
+            ep = "/" + ep;
+        }
+
+        // Handle case where base already ends with /api and endpoint starts with /api
+        if (base.endsWith("/api") && ep.startsWith("/api/")) {
+            ep = ep.substring(4);
+        } else if (!base.endsWith("/api") && !ep.startsWith("/api/")) {
+            if (base.length > 0 && !base.startsWith("/")) {
+                base = base + "/api";
+            } else if (!base) {
+                base = "/api";
+            }
+        }
+
+        const combined = `${base}${ep}`;
+        // Normalize double slashes, preserving http:// or https://
+        return combined.replace(/([^:])\/+/g, "$1/");
     }
 
     getHeaders() {
@@ -18,7 +49,8 @@ class ApiClient {
     }
 
     async request(endpoint, options = {}) {
-        const url = `${this.baseUrl}${endpoint}`;
+        this.updateBaseUrl();
+        const url = this.buildUrl(endpoint);
         const headers = this.getHeaders();
 
         const config = {
@@ -48,10 +80,20 @@ class ApiClient {
 
             return data;
         } catch (err) {
-            console.error(`API Error on ${endpoint}:`, err);
+            console.error(`API Error on ${url}:`, err);
+            if (window.location.hostname.includes("github.io") && window.NOVADROP_CONFIG && !window.NOVADROP_CONFIG.isConfigured()) {
+                if (typeof window.showBackendSetupModal === "function") {
+                    window.showBackendSetupModal();
+                }
+            }
             throw err;
         }
     }
+
+    getHealth() {
+        return this.request("/health");
+    }
+
 
     // --- AUTH ---
     login(email, password) {
@@ -284,6 +326,38 @@ class ApiClient {
     }
     getAuditLogs() {
         return this.request("/admin/audit-logs");
+    }
+
+    // --- WEBHOOKS & INTEGRATIONS ---
+    getWebhookEvents() {
+        return this.request("/webhooks/events");
+    }
+    getWebhookSubscriptions() {
+        return this.request("/webhooks/subscriptions");
+    }
+    createWebhookSubscription(payload) {
+        return this.request("/webhooks/subscriptions", { method: "POST", body: payload });
+    }
+    getWebhookSubscription(id) {
+        return this.request(`/webhooks/subscriptions/${id}`);
+    }
+    updateWebhookSubscription(id, payload) {
+        return this.request(`/webhooks/subscriptions/${id}`, { method: "PUT", body: payload });
+    }
+    deleteWebhookSubscription(id) {
+        return this.request(`/webhooks/subscriptions/${id}`, { method: "DELETE" });
+    }
+    testWebhookSubscription(id) {
+        return this.request(`/webhooks/subscriptions/${id}/test`, { method: "POST" });
+    }
+    getWebhookDeliveries(subscriptionId = null, status = "", limit = 50) {
+        let ep = `/webhooks/deliveries?limit=${limit}`;
+        if (subscriptionId) ep += `&subscription_id=${subscriptionId}`;
+        if (status) ep += `&status=${status}`;
+        return this.request(ep);
+    }
+    resendWebhookDelivery(deliveryId) {
+        return this.request(`/webhooks/deliveries/${deliveryId}/resend`, { method: "POST" });
     }
 }
 

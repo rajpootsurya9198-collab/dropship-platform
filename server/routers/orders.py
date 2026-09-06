@@ -156,6 +156,18 @@ def cancel_order(order_number):
 
     log_audit("ORDER_CANCELLED", "orders", order["id"], {"order_number": order_number, "reason": reason})
 
+    try:
+        from ..services.webhook_service import webhook_service
+        webhook_service.dispatch_event("order.cancelled", {
+            "order_id": order["id"],
+            "order_number": order_number,
+            "reason": reason,
+            "customer_email": order["customer_email"],
+            "cancelled_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        print(f"Webhook dispatch error on cancel: {e}")
+
     return jsonify({"message": f"Order {order_number} has been cancelled and inventory restored.", "order_status": "cancelled"})
 
 @orders_bp.route("/<order_number>/request-refund", methods=["POST"])
@@ -205,6 +217,19 @@ def request_refund(order_number):
         "requested_amount": requested_amount,
         "reason": reason
     })
+
+    try:
+        from ..services.webhook_service import webhook_service
+        webhook_service.dispatch_event("refund.requested", {
+            "dispute_id": dispute_id,
+            "order_id": order["id"],
+            "order_number": order_number,
+            "requested_amount": requested_amount,
+            "reason": reason,
+            "customer_email": order["customer_email"]
+        })
+    except Exception as e:
+        print(f"Webhook dispatch error on refund: {e}")
 
     return jsonify({
         "message": "Refund and return dispute submitted. Our dropship support team and supplier will review within 24 hours.",

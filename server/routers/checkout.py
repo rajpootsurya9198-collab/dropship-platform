@@ -321,6 +321,44 @@ def place_order():
         "suppliers_count": len(supplier_ids)
     })
 
+    # Dispatch outbound webhooks
+    try:
+        from ..services.webhook_service import webhook_service
+        webhook_service.dispatch_event("order.created", {
+            "order_id": order_id,
+            "order_number": order_number,
+            "customer_email": customer_email,
+            "customer_name": customer_name,
+            "total_amount": total_amount,
+            "subtotal": subtotal,
+            "shipping_fee": shipping_fee,
+            "discount_amount": discount_amount,
+            "items_count": len(validated_items),
+            "fulfillments_count": len(fulfillments_created)
+        })
+        webhook_service.dispatch_event("order.paid", {
+            "order_id": order_id,
+            "order_number": order_number,
+            "payment_transaction_id": tx_id,
+            "amount": total_amount,
+            "currency": "USD",
+            "payment_status": "paid"
+        })
+
+        # Check for inventory warnings
+        for it in validated_items:
+            prod = query_one("SELECT id, title, sku, stock_quantity, low_stock_threshold FROM products WHERE id = ?", (it["product_id"],))
+            if prod and prod["stock_quantity"] <= prod["low_stock_threshold"]:
+                webhook_service.dispatch_event("inventory.low_stock", {
+                    "product_id": prod["id"],
+                    "title": prod["title"],
+                    "sku": prod["sku"],
+                    "stock_quantity": prod["stock_quantity"],
+                    "low_stock_threshold": prod["low_stock_threshold"]
+                })
+    except Exception as e:
+        print(f"Webhook dispatch error in checkout: {e}")
+
     return jsonify({
         "message": "Order placed and paid successfully!",
         "order_id": order_id,
@@ -330,3 +368,4 @@ def place_order():
         "fulfillments": fulfillments_created,
         "tracking_url": f"/#tracking?order={order_number}"
     }), 201
+
